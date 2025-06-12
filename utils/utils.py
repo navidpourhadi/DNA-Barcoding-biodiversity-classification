@@ -5,8 +5,10 @@ import os
 from torch_geometric.data import Data
 import torch
 
-def load_dataset(file_path: str, k, positional_encoding_dim) -> pd.DataFrame:
+from typing import Tuple, Optional
 
+
+def load_dataset(file_path:str, specimen_map: Optional[dict] = None) -> Tuple[pd.DataFrame, dict]: 
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"The file {file_path} does not exist.")
     
@@ -20,10 +22,18 @@ def load_dataset(file_path: str, k, positional_encoding_dim) -> pd.DataFrame:
         data = [(entry[0].split("|")[1], entry[1].replace('\n', '')) for entry in data]
         
         df = pd.DataFrame(data, columns=['specimen', 'sequence'])
-        df['node_features'], df['fwd_edges_index'], df['bwd_edges_index'], df['edges_attr'] = zip(*df['sequence'].apply(lambda x: de_bruijn_graph(x, k, positional_encoding_dim)))
-        specimen_to_index = {specimen: index for index, specimen in enumerate(df['specimen'].unique())}
-        df['specimen_id'] = df['specimen'].map(specimen_to_index)
-        return df
+        if specimen_map is not None:
+            df['specimen'] = df['specimen'].map(specimen_map)
+        else:
+            specimen_map = {specimen: index for index, specimen in enumerate(df['specimen'].unique())}
+            df['specimen_id'] = df['specimen'].map(specimen_map)
+
+    return df, specimen_map
+
+
+def pre_process_dataset(df: pd.DataFrame, k: int, positional_encoding_dim: int) -> pd.DataFrame:
+    df['data'] = df.apply(lambda row: de_bruijn_graph(row['sequence'], k, positional_encoding_dim, row['specimen_id']), axis=1)
+    return df
 
 
 def one_hot_encode(sequence: str) -> np.ndarray:
