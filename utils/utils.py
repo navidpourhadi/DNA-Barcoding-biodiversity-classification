@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import os
 
-from torch.utils.data import Dataset
+from torch_geometric.data import Data
 import torch
 
 def load_dataset(file_path: str, k, positional_encoding_dim) -> pd.DataFrame:
@@ -51,7 +51,7 @@ def sinusoidal_positional_encoding(position: int, d_model: int) -> np.ndarray:
     return pos_encoding
 
 
-def de_bruijn_graph(sequence, k, positional_encoding_dim):
+def de_bruijn_graph(sequence, k, positional_encoding_dim, y):
 
     # Pad the sequence so it’s divisible by k
     sequence = sequence + 'N' * (k - (len(sequence) % k))
@@ -81,46 +81,11 @@ def de_bruijn_graph(sequence, k, positional_encoding_dim):
         dst_indices.append(node_to_idx[suffix])
         edge_attr.append(pos_enc)
 
-        # src_indices.append(node_to_idx[suffix])
-        # dst_indices.append(node_to_idx[prefix])
-        # edge_dir.append(1)
-        # edge_attr.append(pos_enc)
 
     fwd_edge_index = np.array([src_indices, dst_indices], dtype=np.int64)
-    bwd_edge_index = np.array([dst_indices, src_indices], dtype=np.int64)    
     edge_attr = np.array(edge_attr, dtype=np.float32)
 
     node_features = np.array([one_hot_encode(node) for node in node_list], dtype=np.float32)
 
-    return node_features, fwd_edge_index, bwd_edge_index, edge_attr
-
-
-class GraphDataset(Dataset):
-    def __init__(self, node_features, fwd_edges_index, bwd_edges_index, edges_attr, labels):
-        self.node_features = node_features
-        self.fwd_edges_index = fwd_edges_index
-        self.bwd_edges_index = bwd_edges_index
-        self.edges_attr = edges_attr
-
-        self.labels = labels
-
-    def __len__(self):
-        return len(self.node_features)
-
-    def __getitem__(self, idx):
-        return {
-            'node_features': self.node_features[idx],
-            'fwd_edges_index': self.fwd_edges_index[idx],
-            'bwd_edges_index': self.bwd_edges_index[idx],
-            'edges_attr': self.edges_attr[idx],
-            'label': self.labels[idx]
-        }
-
-
-def graph_collate_fn(batch):
-    node_features = [item['node_features'] for item in batch]
-    fwd_edges_index = [item['fwd_edges_index'] for item in batch]
-    bwd_edges_index = [item['bwd_edges_index'] for item in batch]
-    edges_attr = [item['edges_attr'] for item in batch]
-    labels = torch.tensor([item['label'] for item in batch], dtype=torch.long)
-    return node_features, fwd_edges_index, bwd_edges_index, edges_attr, labels
+    new_graph = Data(x=torch.tensor(node_features, dtype=torch.float32), edge_index=torch.tensor(fwd_edge_index, dtype=torch.long), edge_attr=torch.tensor(edge_attr, dtype=torch.float32), y=torch.tensor(y, dtype=torch.long))
+    return new_graph
