@@ -12,6 +12,7 @@ from tqdm import tqdm
 import os
 import argparse
 import json
+import time
 
 from utils.utils import *
 from utils.model import DNADeBruijnClassifier
@@ -29,6 +30,10 @@ if __name__ == "__main__":
     argparser.add_argument("--best_params", type=str, default="./outputs/best_params.json", help="Path to the best params file")
     
     args = argparser.parse_args()
+        
+
+    output_dir = "./outputs/Train"+str(time.time())
+    os.makedirs(output_dir, exist_ok=True)
 
     dataset_path = args.dataset
     k = args.k
@@ -38,6 +43,9 @@ if __name__ == "__main__":
     lr = args.learning_rate
     n_workers = args.num_workers
     weight_decay = 1e-5
+    gnn_hidden_layers = [256, 256, 256, 256, 256, 256, 256]
+    linear_hidden_layers = [512, 1024, 1024]
+
 
     if os.path.exists(args.label_map):
         with open(args.label_map, "r") as f:
@@ -56,13 +64,14 @@ if __name__ == "__main__":
             weight_decay = float(best_params['weight_decay'])
             gnn_hidden_layers = [int(x) for x in best_params['gnn_hidden_layers']]
             linear_hidden_layers = [int(x) for x in best_params['linear_hidden_layers']]
-    
+    else:
+        best_params = {}
 
     # Load the dataset
     df, label_map = load_dataset(dataset_path, label_map)
     df = pre_process_dataset(df, k, positional_encoding_dim)
-    
-    num_classes = len(df['specimen'].unique())
+    df = df[:100]
+    num_classes = len(label_map.keys())
 
     # prepare the data for training
     print(f"Loaded {len(df)} sequences from {dataset_path}")
@@ -161,7 +170,7 @@ if __name__ == "__main__":
             disp.plot(ax=ax, xticks_rotation=90)
             plt.title(f"Confusion Matrix - Epoch {epoch+1}")
             plt.tight_layout()
-            plt.savefig(f"./outputs/confusion_matrix_epoch_{epoch+1}.png")
+            plt.savefig(f"{output_dir}/confusion_matrix_epoch_{epoch+1}.png")
             plt.close()
 
     # creating plot for accuracy score of validation
@@ -169,7 +178,7 @@ if __name__ == "__main__":
     plt.title(f"Validation Accuracy Score")
     plt.xlabel("Epoch")
     plt.ylabel("Accuracy")
-    plt.savefig(f"./outputs/accuracy_score.png")
+    plt.savefig(f"{output_dir}/accuracy_score.png")
     plt.close()
 
     # creating plot for loss score of validation
@@ -178,7 +187,7 @@ if __name__ == "__main__":
     plt.title(f"Loss Score")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
-    plt.savefig(f"./outputs/loss_score.png")
+    plt.savefig(f"{output_dir}/loss_score.png")
     plt.close()
 
     # creating plot for R2 score of the validation
@@ -186,10 +195,32 @@ if __name__ == "__main__":
     plt.title(f"R2 Score")
     plt.xlabel("Epoch")
     plt.ylabel("R2")
-    plt.savefig(f"./outputs/r2_score.png")
+    plt.savefig(f"{output_dir}/r2_score.png")
     plt.close()
 
 
 
-    # Save the model
-    torch.save(model.state_dict(), "./outputs/model.pt")
+    
+
+
+    # Save final model
+    os.makedirs(output_dir, exist_ok=True)
+    torch.save(model.state_dict(), output_dir + "/final_model.pt")
+
+    with open(output_dir + "/label_map.json", "w") as f:
+        json.dump(label_map, f)
+    
+    # update the best params
+    best_params['learning_rate'] = lr
+    best_params['batch_size'] = batch_size
+    best_params['k'] = k
+    best_params['positional_encoding_dim'] = positional_encoding_dim
+    best_params['weight_decay'] = weight_decay
+    best_params['gnn_hidden_layers'] = gnn_hidden_layers
+    best_params['linear_hidden_layers'] = linear_hidden_layers
+    with open(output_dir + "/best_params.json", "w") as f:
+        json.dump(best_params, f)
+
+    print(f"Best params saved to {output_dir}/best_params.json")     
+    print(f"Label map saved to {output_dir}/label_map.json")
+    print(f"Final model trained and saved to {output_dir}/final_model.pt")
