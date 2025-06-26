@@ -100,15 +100,27 @@ if __name__ == "__main__":
 
         train_loss_history.append(train_loss / len(train_loader))
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {train_loss / len(train_loader):.4f}")
-        
+
+
+    
 
 
     # Save final model
     output_dir = "./outputs/Train"+time.time()
     os.makedirs(output_dir, exist_ok=True)
     torch.save(model.state_dict(), output_dir + "/final_model.pt")
+
     with open(output_dir + "/label_map.json", "w") as f:
         json.dump(label_map, f)
+    
+    # update the best params
+    best_params['learning_rate'] = lr
+    best_params['batch_size'] = batch_size
+    best_params['k'] = k
+    best_params['positional_encoding_dim'] = positional_encoding_dim
+    best_params['weight_decay'] = weight_decay
+    best_params['gnn_hidden_layers'] = gnn_hidden_layers
+    best_params['linear_hidden_layers'] = linear_hidden_layers
     with open(output_dir + "/best_params.json", "w") as f:
         json.dump(best_params, f)
 
