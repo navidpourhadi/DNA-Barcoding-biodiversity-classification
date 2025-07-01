@@ -14,6 +14,7 @@ import argparse
 import time
 import json
 import copy
+import matplotlib.pyplot as plt
 
 from utils.utils import load_dataset, pre_process_dataset
 from utils.model import DNADeBruijnClassifier
@@ -32,6 +33,13 @@ if __name__ == "__main__":
 
     # Dataset and basic config
     dataset_path = args.dataset
+
+    # extract dataset file name
+    dataset_name = os.path.basename(dataset_path).split(".")[0]
+
+    output_dir = "./outputs/k_fold_"+dataset_name
+    os.makedirs(output_dir, exist_ok=True)
+
     k = args.k
     pos_dim = args.positional_encoding_dim
     num_epochs = args.num_epochs
@@ -54,22 +62,16 @@ if __name__ == "__main__":
 
     # Define hyperparameter grid
     hyperparams_grid = {
-        'learning_rate': [0.01, 0.001, 0.0001],
-        'batch_size': [16, 32],
+        'learning_rate': [0.001],
+        'batch_size': [32],
         'k': [3, 4, 5],
-        'positional_encoding_dim': [64, 128],
-        'weight_decay': [
-            1e-6,
-            1e-5,
-            1e-4,
-        ],
+        'positional_encoding_dim': [128],
+        'weight_decay': [1e-5],
         'gnn_hidden_layers': [
-            [256, 256, 256, 256, 256, 256, 256, 256],
-            [256, 256, 512, 512, 1028, 1028, 1028, 1028]
+            [256, 256, 256, 256, 256, 256, 256, 256]
         ],
         'linear_hidden_layers': [
-            [512, 1024, 2048],
-            [1024, 2048]
+            [512, 1024, 2048]
         ],
     }
 
@@ -80,6 +82,9 @@ if __name__ == "__main__":
     best_avg_acc = 0.0
     best_params = None
     best_model_state = None
+
+    # val accuracy history
+    val_accuracies = {}
 
     for combo in param_combinations:
         params = dict(zip(param_names, combo))
@@ -101,11 +106,11 @@ if __name__ == "__main__":
             val_loader = DataLoader(val_df["data"].tolist(), batch_size=params['batch_size'], shuffle=False, num_workers=n_workers)
 
             model = DNADeBruijnClassifier(
-                input_size=(k - 1) * 4,
+                input_size=(params['k'] - 1) * 4,
                 gnn_hidden_layers=params['gnn_hidden_layers'],
                 linear_hidden_layers=params['linear_hidden_layers'],
                 output_size=num_classes,
-                edge_dim=pos_dim
+                edge_dim=params['positional_encoding_dim']
             ).to(device)
 
             optimizer = torch.optim.AdamW(model.parameters(), lr=params['learning_rate'], weight_decay=params['weight_decay'])
@@ -113,6 +118,10 @@ if __name__ == "__main__":
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
             # Training
             model.train()
+
+            best_loss = float('inf')
+            best_model = None
+
             for epoch in range(num_epochs):
                 total_loss = 0
                 for batch in tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}"):
@@ -127,14 +136,18 @@ if __name__ == "__main__":
                 lr_scheduler.step()
                 print(f"Training loss:{total_loss / len(train_loader):.4f}")    
 
+                if total_loss < best_loss:
+                    best_loss = total_loss
+                    best_model = model
+
             # Validation
-            model.eval()
+            best_model.eval()
             all_preds = []
             all_labels = []
             with torch.no_grad():
                 for batch in val_loader:
                     batch = batch.to(device)
-                    output = model(batch)
+                    output = best_model(batch)
                     preds = torch.argmax(output, dim=1)
                     all_preds.extend(preds.cpu().numpy())
                     all_labels.extend(batch.y.cpu().numpy())
@@ -144,12 +157,22 @@ if __name__ == "__main__":
             fold_accuracies.append(acc)
 
         avg_acc = np.mean(fold_accuracies)
+        val_accuracies[params["k"]] = avg_acc
         print(f"\nAverage Accuracy for {params}: {avg_acc * 100:.2f}%")
 
         if avg_acc > best_avg_acc:
             best_avg_acc = avg_acc
             best_params = params
-            best_model_state = model.state_dict()
+            best_model_state = best_model.state_dict()
+
+
+    # make a plot of the validation accuracy for each hyperparameter combination
+    plt.plot(val_accuracies.keys(), val_accuracies.values())
+    plt.title(f"Validation Accuracy Score")
+    plt.xlabel("k")
+    plt.ylabel("Accuracy")
+    plt.savefig(f"{output_dir}/accuracy_score.png")
+    plt.close()
 
     # Save best model
     print(f"\nBest Params: {best_params} with Accuracy: {best_avg_acc * 100:.2f}%")
@@ -166,7 +189,7 @@ if __name__ == "__main__":
     )
 
     final_model = DNADeBruijnClassifier(
-        input_size=(k - 1) * 4,
+        input_size=(best_params['k'] - 1) * 4,
         gnn_hidden_layers=best_params['gnn_hidden_layers'],
         linear_hidden_layers=best_params['linear_hidden_layers'],
         output_size=num_classes,
@@ -179,8 +202,15 @@ if __name__ == "__main__":
         weight_decay=best_params['weight_decay']
     )
     criterion = nn.CrossEntropyLoss().to(device)
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max= 4 * num_epochs)
 
-    for epoch in range(num_epochs):
+    train_loss_history = []
+
+
+    best_final_loss = float('inf')
+    best_final_model = None
+
+    for epoch in range(4 * num_epochs):
         final_model.train()
         total_loss = 0
         for batch in tqdm(full_loader, desc=f"[Final Train] Epoch {epoch + 1}/{num_epochs}"):
@@ -191,13 +221,31 @@ if __name__ == "__main__":
             loss.backward()
             torch.nn.utils.clip_grad_norm_(final_model.parameters(), 1.0)
             optimizer.step()
+
             total_loss += loss.item()
+        
+        lr_scheduler.step()
+        train_loss_history.append(total_loss / len(full_loader))
         print(f"[Final Train] Epoch {epoch + 1} Loss: {total_loss / len(full_loader):.4f}")
 
+        if total_loss < best_final_loss:
+            best_final_loss = total_loss
+            best_final_model = final_model
+
+    # plot the train_loss_history
+    plt.plot(train_loss_history)
+    plt.title(f"Train Loss History with best params {best_params}")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.savefig(f"{output_dir}/train_loss_history.png")
+    plt.close()
+
+
     # Save final model
-    output_dir = "./outputs/Train"+time.time()
+
     os.makedirs(output_dir, exist_ok=True)
     torch.save(final_model.state_dict(), output_dir + "/final_model.pt")
+    torch.save(best_final_model.state_dict(), output_dir + "/best_final_model.pt")
     with open(output_dir + "/label_map.json", "w") as f:
         json.dump(label_map, f)
     with open(output_dir + "/best_params.json", "w") as f:
