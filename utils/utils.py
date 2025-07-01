@@ -19,15 +19,16 @@ def load_dataset(file_path:str, specimen_map: Optional[dict] = None) -> Tuple[pd
 
         # for each data entry, split the first \n from the rest of the string
         data = [entry.split('\n', 1) for entry in data]
-        data = [(entry[0].split("|")[1], entry[1].replace('\n', '')) for entry in data]
-        
+        data = [(entry[0].split("|")[1], entry[1].replace('\n', '').replace('-', '')) for entry in data]
         df = pd.DataFrame(data, columns=['specimen', 'sequence'])
         if specimen_map is not None:
-            df['specimen'] = df['specimen'].map(specimen_map)
+            df['specimen_id'] = df['specimen'].map(specimen_map)
         else:
             specimen_map = {specimen: index for index, specimen in enumerate(df['specimen'].unique())}
             df['specimen_id'] = df['specimen'].map(specimen_map)
-
+        # print(df['specimen_id'].dtypes)
+        # filter rows with specimen_id equal to nan
+        df = df[df['specimen_id'].notna()]
     return df, specimen_map
 
 
@@ -96,6 +97,5 @@ def de_bruijn_graph(sequence, k, positional_encoding_dim, y):
     edge_attr = np.array(edge_attr, dtype=np.float32)
 
     node_features = np.array([one_hot_encode(node) for node in node_list], dtype=np.float32)
-
     new_graph = Data(x=torch.tensor(node_features, dtype=torch.float32), edge_index=torch.tensor(fwd_edge_index, dtype=torch.long), edge_attr=torch.tensor(edge_attr, dtype=torch.float32), y=torch.tensor(y, dtype=torch.long))
     return new_graph
