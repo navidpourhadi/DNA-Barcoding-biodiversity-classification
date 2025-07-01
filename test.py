@@ -10,7 +10,7 @@ import json
 
 from utils.utils import *
 from utils.model import DNADeBruijnClassifier
-from sklearn.metrics import r2_score, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import r2_score, confusion_matrix, ConfusionMatrixDisplay, precision_score, recall_score
 import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
@@ -26,6 +26,8 @@ if __name__ == "__main__":
     n_workers = args.num_workers
     model_path = args.weights
 
+    # find the directory of model_path
+    directory = os.path.dirname(model_path)
 
     if os.path.exists(args.label_map):
         with open(args.label_map, "r") as f:
@@ -50,6 +52,13 @@ if __name__ == "__main__":
 
     # Load the dataset
     df, label_map = load_dataset(dataset_path, label_map)
+
+    print(df.columns)
+    print(df["specimen_id"].unique())
+
+    # print df where specimen_id is nan
+    print(df[df["specimen_id"].isna()])
+
     df = pre_process_dataset(df, k, positional_encoding_dim).reset_index(drop=True)
     
     num_classes = len(label_map.keys())
@@ -65,7 +74,7 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     model = DNADeBruijnClassifier(input_size= (k - 1) * 4, gnn_hidden_layers= gnn_hidden_layers, linear_hidden_layers= linear_hidden_layers, output_size= num_classes, edge_dim= positional_encoding_dim)
-    model.load_state_dict(torch.load(model_path))
+    model.load_state_dict(torch.load(model_path, map_location=device))
     criterion = nn.CrossEntropyLoss()
 
     model.to(device)
@@ -97,16 +106,35 @@ if __name__ == "__main__":
     test_loss /= len(test_loader)
     test_accuracy = 100 * correct / total  # Accuracy as a percentage
     r2 = r2_score(all_labels, all_preds)
+    
+    precision_macro = precision_score(all_labels, all_preds, average='macro', zero_division=0)
+    recall_macro = recall_score(all_labels, all_preds, average='macro', zero_division=0)
 
-    print(f"test Loss: {test_loss:.4f}, Accuracy: {test_accuracy:.2f}%, R2 Score: {r2:.4f}")
+    precision_micro = precision_score(all_labels, all_preds, average='micro', zero_division=0)
+    recall_micro = recall_score(all_labels, all_preds, average='micro', zero_division=0)
+
+
+    print(f"Test Loss: {test_loss:.4f}")
+    print(f"Accuracy: {test_accuracy:.2f}%")
+    print(f"R2 Score: {r2:.4f}")
+    print(f"Precision (Macro): {precision_macro:.4f}, Recall (Macro): {recall_macro:.4f}")
+    print(f"Precision (Micro): {precision_micro:.4f}, Recall (Micro): {recall_micro:.4f}")
+    
+    # save the results
+    with open(f"{directory}/results.txt", "w") as f:
+        f.write(f"Dataset: {dataset_path}\n")
+        f.write(f"Test Loss: {test_loss:.4f}\n")
+        f.write(f"Accuracy: {test_accuracy:.2f}%\n")
+        f.write(f"R2 Score: {r2:.4f}\n")
+        f.write(f"Precision (Macro): {precision_macro:.4f}, Recall (Macro): {recall_macro:.4f}\n")
+        f.write(f"Precision (Micro): {precision_micro:.4f}, Recall (Micro): {recall_micro:.4f}\n")
+
 
     class_indices = np.arange(num_classes)
     # Map index to class name using the same order
     index_to_species = {v: k for k, v in label_map.items()}
     ordered_species_names = [index_to_species[i] for i in class_indices]
 
-    # find the directory of model_path
-    directory = os.path.dirname(model_path)
 
     # creating the last epoch confusion matrix
     cm = confusion_matrix(all_labels, all_preds, labels=class_indices)
