@@ -110,7 +110,7 @@ if __name__ == "__main__":
 
             optimizer = torch.optim.AdamW(model.parameters(), lr=params['learning_rate'], weight_decay=params['weight_decay'])
             criterion = nn.CrossEntropyLoss().to(device)
-
+            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
             # Training
             model.train()
             for epoch in range(num_epochs):
@@ -124,6 +124,7 @@ if __name__ == "__main__":
                     torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
                     optimizer.step()
                     total_loss += loss.item()
+                lr_scheduler.step()
                 print(f"Training loss:{total_loss / len(train_loader):.4f}")    
 
             # Validation

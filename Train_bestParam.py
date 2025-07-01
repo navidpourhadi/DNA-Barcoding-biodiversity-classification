@@ -10,6 +10,7 @@ import argparse
 import json
 import time
 
+import matplotlib.pyplot as plt
 from utils.utils import *
 from utils.model import DNADeBruijnClassifier
 
@@ -28,6 +29,10 @@ if __name__ == "__main__":
     args = argparser.parse_args()
 
     dataset_path = args.dataset
+    dataset_name = os.path.basename(dataset_path).split(".")[0]
+    output_dir = "./outputs/best_"+dataset_name
+    os.makedirs(output_dir, exist_ok=True)
+
     num_epochs = args.num_epochs
     n_workers = args.num_workers
     best_params = None
@@ -70,7 +75,7 @@ if __name__ == "__main__":
 
     model = DNADeBruijnClassifier(input_size= (k - 1) * 4, gnn_hidden_layers= gnn_hidden_layers, linear_hidden_layers= linear_hidden_layers, output_size= num_classes, edge_dim= positional_encoding_dim)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
-    lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2, factor=0.5, min_lr=1e-5)
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
 
     criterion = nn.CrossEntropyLoss()
 
@@ -78,9 +83,8 @@ if __name__ == "__main__":
     criterion.to(device)
 
     train_loss_history = []
-    val_loss_history = []
-    val_accuracy_history = []
-    val_r2_history = []
+    best_loss = float('inf')
+    best_model = None
     for epoch in range(num_epochs):
         train_loss = 0
         model.train()  # Set model to training mode
@@ -97,18 +101,29 @@ if __name__ == "__main__":
 
             loss.backward()
             optimizer.step()
+        
+        lr_scheduler.step()
 
         train_loss_history.append(train_loss / len(train_loader))
+
+        if train_loss <= best_loss:
+            best_loss = train_loss
+            best_model = model
+
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {train_loss / len(train_loader):.4f}")
 
-
-    
+    # plot the train_loss_history
+    plt.plot(train_loss_history)
+    plt.title(f"Train Loss History with best params {best_params}")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.savefig(f"{output_dir}/train_loss_history.png")
+    plt.close()
 
 
     # Save final model
-    output_dir = "./outputs/Train"+time.time()
-    os.makedirs(output_dir, exist_ok=True)
     torch.save(model.state_dict(), output_dir + "/final_model.pt")
+    torch.save(best_model.state_dict(), output_dir + "/best_final_model.pt")
 
     with open(output_dir + "/label_map.json", "w") as f:
         json.dump(label_map, f)
