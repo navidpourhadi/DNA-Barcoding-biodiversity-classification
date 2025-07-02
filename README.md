@@ -1,3 +1,4 @@
+
 # 🧬 DNA Barcoding with De Bruijn Graphs and GNNs
 
 A PyTorch Geometric project that integrates **De Bruijn graph** representations with **direction-aware Graph Neural Networks (GNNs)** for accurate and scalable classification of DNA barcode sequences. Developed as part of the Deep Learning course at the University of Padova.
@@ -56,3 +57,48 @@ positional_encoding_dim = 128
 gnn_hidden_layers = [256] * 8
 linear_hidden_layers = [512, 1024, 2048]
 weight_decay = 1e-5
+```
+
+## 🚀 Installation
+
+```bash
+git clone https://github.com/<your-username>/DNA-GNN-Barcoding.git
+cd DNA-GNN-Barcoding
+pip install -r requirements.txt
+```
+
+## 🛠️ Usage
+
+### Training
+```bash
+python train.py --dataset <dataset_name> --k 5 --positional_encoding_dim 128
+```
+
+### Testing
+```bash
+python test.py --model_path ./models/best_model.pth
+```
+
+### Available Datasets
+Place your datasets under `./data/` in FASTA-like format. Dataset names should match:
+- `bats`
+- `birds`
+- `fishes`
+- `Inga`
+- `Cypraeidae`
+
+## 📊 Visualization
+
+Confusion matrices and accuracy plots for k-mer analysis are generated for detailed evaluation.
+
+## 🔍 Citation
+
+This project was developed as part of the Deep Learning course at:
+
+**Università degli Studi di Padova**  
+*Dipartimento di Ingegneria dell’Informazione*  
+Author: **Navid Pourhadi Hasanabad**
+
+## 📄 License
+
+This project is open-source and freely available under the MIT License.
