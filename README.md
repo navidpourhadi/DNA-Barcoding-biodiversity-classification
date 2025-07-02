@@ -72,12 +72,16 @@ pip install -r requirements.txt
 
 ### Training
 ```bash
-python train.py --dataset <dataset_name> --k 5 --positional_encoding_dim 128
+python Train_kfold.py --dataset <dataset_path> --num_epochs <epoch_num>
+```
+or
+```bash
+python Train_bestParam.py --dataset <dataset_paht> --label_map <label_map_path(optional)> --best_param <best_param_path> --num_epochs <epoch count>
 ```
 
 ### Testing
 ```bash
-python test.py --model_path ./models/best_model.pth
+python test.py --dataset <test_dataset_path> --label_map <label_map> --best_param <best_param> --weights <model_weight_path>
 ```
 
 ### Available Datasets
@@ -92,6 +96,11 @@ Place your datasets under `./data/`. Dataset names should match:
 ## 📊 Visualization
 
 Confusion matrices and accuracy plots for k-mer analysis are generated for detailed evaluation.
+
+## Model weights
+
+For having access to the model weights, send a request to my email at the address navid.pourhadihasanabad@studenti.unipd.it
+
 
 ## 🔍 Citation
 
