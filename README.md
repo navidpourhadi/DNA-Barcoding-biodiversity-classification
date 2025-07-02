@@ -27,6 +27,7 @@ The approach shows strong generalization and achieves high accuracy on diverse D
 ## 🧪 Datasets
 
 Each dataset contains DNA barcode sequences labeled by species. The sequences vary in length and number of classes. De Bruijn graphs are constructed using different `k` values (3, 4, 5), with best results for `k = 5`.
+The datasets can be downloaded from [here](http://dmb.iasi.cnr.it/supbarcodes.php)
 
 Example dataset:
 - **Bats:** 95 classes, 839 samples, sequence length: 657 bp
@@ -62,8 +63,8 @@ weight_decay = 1e-5
 ## 🚀 Installation
 
 ```bash
-git clone https://github.com/<your-username>/DNA-GNN-Barcoding.git
-cd DNA-GNN-Barcoding
+git clone git@github.com:navidpourhadi/DNA-Barcoding-biodiversity-classification.git
+cd DNA-Barcoding-biodiversity-classification
 pip install -r requirements.txt
 ```
 
@@ -80,7 +81,8 @@ python test.py --model_path ./models/best_model.pth
 ```
 
 ### Available Datasets
-Place your datasets under `./data/` in FASTA-like format. Dataset names should match:
+Download the datasets from this [link](http://dmb.iasi.cnr.it/supbarcodes.php).
+Place your datasets under `./data/`. Dataset names should match:
 - `bats`
 - `birds`
 - `fishes`
